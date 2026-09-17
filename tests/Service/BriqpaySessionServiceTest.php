@@ -37,6 +37,13 @@ use Symfony\Component\Routing\RouterInterface;
  * endpoint directly.
  *
  * @covers \Briqpay\Payments\Service\BriqpaySessionService
+ *
+ * buildPayload() dispatches BriqpaySessionPreCreateEvent and reads the payload
+ * back off it, so these tests execute that class without being a test of it.
+ * Declaring it keeps beStrictAboutCoversAnnotation on, so a test that strays
+ * into some *other* part of the plugin is still reported as risky.
+ *
+ * @uses \Briqpay\Payments\Event\BriqpaySessionPreCreateEvent
  */
 class BriqpaySessionServiceTest extends TestCase
 {

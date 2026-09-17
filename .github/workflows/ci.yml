@@ -268,9 +268,13 @@ jobs:
 
       - name: Fail on any PHP fatal
         if: always()
+        # Only genuine fatals. Shopware logs handled exceptions as
+        # "request.ERROR: Uncaught PHP Exception ...", including routine
+        # dockware noise such as "Another worker is already running for
+        # receiver: async" -- matching those fails the job for nothing.
         run: |
-          if docker exec sw bash -lc "grep -rIl 'PHP Fatal\|Uncaught' /var/www/html/var/log/ 2>/dev/null"; then
-            docker exec sw bash -lc "grep -rI 'PHP Fatal\|Uncaught' /var/www/html/var/log/ | tail -40"
+          if docker exec sw bash -lc "grep -rIl 'PHP Fatal error' /var/www/html/var/log/ 2>/dev/null"; then
+            docker exec sw bash -lc "grep -rI 'PHP Fatal error' /var/www/html/var/log/ | tail -40"
             echo "::error::A PHP fatal occurred during the smoke test"
             exit 1
           fi
