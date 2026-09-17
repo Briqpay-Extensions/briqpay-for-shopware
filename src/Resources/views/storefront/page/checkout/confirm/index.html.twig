@@ -1,0 +1,100 @@
+{% extends '@Storefront/storefront/page/checkout/confirm/index.html.twig' %}
+
+{# Remove aside (right column) and summary – Briqpay iframe replaces the checkout flow #}
+{% block page_checkout_confirm_aside %}{% endblock %}
+{% block page_checkout_summary_container %}{% endblock %}
+
+{# Hide default payment selection and standard form – Briqpay provides its own #}
+{% block page_checkout_confirm_payment %}{% endblock %}
+{% block page_checkout_confirm_form %}{% endblock %}
+
+{# Render the Briqpay checkout iframe after the product table #}
+{% block page_checkout_confirm_product_table %}
+    {{ parent() }}
+
+    <div class="briqpay-checkout-section" style="margin-top: 3rem; clear: both;">
+        <div class="briqpay-wrapper card">
+            <div class="card-body">
+                {% if page.extensions.briqpay and page.extensions.briqpay.snippet %}
+                    <div id="briqpay-checkout-container">
+                        {{ page.extensions.briqpay.snippet|raw }}
+                    </div>
+
+                    {# Briqpay Decision Event Listener #}
+                    <script>
+                        (function() {
+                            const initBriqpayEvents = function() {
+                                const briqpayObj = window._briqpay || window.briqpay;
+
+                                if (briqpayObj && typeof briqpayObj.subscribe === 'function') {
+                                    briqpayObj.subscribe('make_decision', function (data) {
+                                        fetch('{{ path('frontend.briqpay.decision') }}', {
+                                            method: 'POST',
+                                            headers: {
+                                                'Content-Type': 'application/json',
+                                                'X-Requested-With': 'XMLHttpRequest'
+                                            },
+                                            body: JSON.stringify({
+                                                sessionId: data.sessionId
+                                            })
+                                        })
+                                        .then(function(response) {
+                                            if (!response.ok) {
+                                                console.error('Briqpay: Decision request failed with status', response.status);
+                                            }
+                                        })
+                                        .catch(function(error) {
+                                            console.error('Briqpay: Decision error', error);
+                                        })
+                                        .finally(function() {
+                                            // Resume the Briqpay checkout flow after decision is processed
+                                            if (window._briqpay && window._briqpay.v3) {
+                                                window._briqpay.v3.resumeDecision();
+                                            }
+                                        });
+                                    });
+                                } else {
+                                    // Retry if Briqpay object is not ready yet
+                                    setTimeout(initBriqpayEvents, 100);
+                                }
+                            };
+
+                            if (document.readyState === 'complete') {
+                                initBriqpayEvents();
+                            } else {
+                                window.addEventListener('load', initBriqpayEvents);
+                            }
+                        })();
+                    </script>
+                {% else %}
+                    <div class="alert alert-warning" role="alert">
+                        <p>The Briqpay checkout could not be loaded. Please try refreshing the page.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{# CSS adjustments for the Briqpay checkout layout #}
+{% block base_head %}
+    {{ parent() }}
+    <style>
+        #briqpay-checkout-container iframe {
+            width: 100%;
+            border: none;
+            min-height: 600px;
+        }
+
+        /* Make the main column full width */
+        .checkout-main {
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Hide any aside remnants */
+        .checkout-aside {
+            display: none !important;
+        }
+    </style>
+{% endblock %}

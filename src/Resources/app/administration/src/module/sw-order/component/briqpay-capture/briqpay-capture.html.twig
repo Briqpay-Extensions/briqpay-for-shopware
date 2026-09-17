@@ -1,0 +1,226 @@
+<div class="briqpay-capture" v-if="isBriqpayOrder">
+    <sw-card title="Briqpay Order Management">
+        <template #grid>
+            <div v-if="captures && captures.length > 0" style="margin-bottom: 16px;">
+                <table class="briqpay-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Operation</th>
+                            <th style="text-align: right;">Amount</th>
+                            <th style="text-align: right;">Refunded</th>
+                            <th>Reference ID</th>
+                            <th style="text-align: center; width: 100px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="record in captures" :key="record.id" :class="{'briqpay-row--refund': record.type === 'refund'}">
+                            <td>{{ formatDate(record.createdAt) }}</td>
+                            <td>
+                                <span
+                                    :style="{
+                                        color: record.type === 'refund' ? '#de294c' : (record.type === 'cancel' ? '#94a3b8' : '#37d046'),
+                                        fontWeight: 600,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px'
+                                    }">
+                                    <sw-icon v-if="record.type === 'refund'" name="regular-undo" size="12px"></sw-icon>
+                                    <sw-icon v-else-if="record.type === 'cancel'" name="regular-times-circle" size="12px"></sw-icon>
+                                    <sw-icon v-else name="regular-check-circle" size="12px"></sw-icon>
+                                    {{ record.type === 'refund' ? 'Refund' : (record.type === 'cancel' ? 'Cancelled' : 'Capture') }}
+                                </span>
+                            </td>
+                            <td style="text-align: right;">{{ Number(record.amount).toFixed(2) }}</td>
+                            <td style="text-align: right;">
+                                <template v-if="record.type !== 'refund'">{{ captureRefundedAmount(record).toFixed(2) }}</template>
+                                <template v-else>-</template>
+                            </td>
+                            <td style="font-family: monospace; font-size: 11px; color: #52667a;">
+                                <div v-if="record.type === 'refund'">
+                                    <div title="Refund ID">{{ record.briqpayCaptureId }}</div>
+                                    <div style="font-size: 10px; color: #94a3b8;" title="Parent Capture ID">From: {{ record.parentCaptureId }}</div>
+                                </div>
+                                <div v-else>
+                                    {{ record.briqpayCaptureId }}
+                                </div>
+                            </td>
+                            <td style="text-align: center;">
+                                <sw-button
+                                    v-if="record.type !== 'refund' && allowRefund && captureHasRefundable(record)"
+                                    variant="danger"
+                                    size="x-small"
+                                    @click="onOpenRefundForCapture(record)">
+                                    Refund
+                                </sw-button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Summary -->
+            <div v-if="totalCaptured > 0 || totalRefunded > 0" class="briqpay-summary">
+                <span v-if="totalCaptured > 0"><strong>Total captured:</strong> {{ totalCaptured.toFixed(2) }}</span>
+                <span v-if="totalRefunded > 0" style="margin-left: 24px;"><strong>Total refunded:</strong> {{ totalRefunded.toFixed(2) }}</span>
+            </div>
+            
+            <div v-if="!captures || captures.length === 0" class="briqpay-capture__empty-state">
+                No captures or refunds yet for this order.
+            </div>
+
+            <sw-alert v-if="isManualReview" variant="warning" class="briqpay-capture__pending">
+                Briqpay has flagged this order for manual review. Capture, refund and cancel
+                become available once Briqpay approves it.
+            </sw-alert>
+            <sw-alert v-else-if="isPending" variant="info" class="briqpay-capture__pending">
+                Waiting for Briqpay to approve the payment. Capture, refund and cancel become
+                available once the order is approved (order_status webhook).
+            </sw-alert>
+        </template>
+        
+        <template #footer>
+            <sw-container justify="end" style="gap: 8px;">
+                <sw-button
+                    v-if="allowCancel"
+                    variant="danger"
+                    size="small"
+                    :isLoading="isLoading"
+                    @click="onPerformCancel">
+                    Cancel order
+                </sw-button>
+                <sw-button
+                    v-if="allowCapture"
+                    variant="primary"
+                    size="small"
+                    @click="onOpenCaptureModal">
+                    Capture
+                </sw-button>
+            </sw-container>
+        </template>
+    </sw-card>
+
+    <!-- Capture Modal -->
+    <sw-modal
+        v-if="showCaptureModal"
+        title="Capture Order"
+        @modal-close="showCaptureModal = false"
+        variant="large"
+    >
+        <div class="briqpay-modal-content">
+            <table class="briqpay-table briqpay-table--selectable">
+                <thead>
+                    <tr>
+                        <th style="width: 32px;">
+                            <sw-checkbox-field
+                                :value="allCaptureItemsSelected"
+                                @change="toggleAllItems"
+                            />
+                        </th>
+                        <th>Product</th>
+                        <th style="text-align: right;">Price</th>
+                        <th style="text-align: center; width: 80px;">Remaining</th>
+                        <th style="text-align: center; width: 80px;">To Capture</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(item, idx) in orderItems" :key="item.identifier || idx">
+                        <td>
+                            <sw-checkbox-field
+                                v-model:value="item.selected"
+                                :disabled="item.remainingQuantity <= 0"
+                            />
+                        </td>
+                        <td>{{ item.label }}</td>
+                        <td style="text-align: right;">{{ Number(item.unitPrice).toFixed(2) }}</td>
+                        <td style="text-align: center;">{{ item.remainingQuantity }}</td>
+                        <td style="text-align: center;">
+                            <input
+                                type="number"
+                                v-model.number="item.captureQuantity"
+                                :max="item.remainingQuantity"
+                                min="0"
+                                style="width: 60px; text-align: center; border: 1px solid #d1d9e0; border-radius: 4px; padding: 4px;"
+                                :disabled="item.remainingQuantity <= 0"
+                            >
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="briqpay-modal-footer-fields">
+                <div style="display: flex; align-items: center; justify-content: flex-end; font-size: 16px; font-weight: 600;">
+                    Total: {{ captureAmount.toFixed(2) }}
+                </div>
+            </div>
+        </div>
+
+        <template #modal-footer>
+            <sw-button @click="showCaptureModal = false">Cancel</sw-button>
+            <sw-button variant="primary" @click="onPerformCapture" :isLoading="isLoading">Capture</sw-button>
+        </template>
+    </sw-modal>
+
+    <!-- Refund Modal (per-capture) -->
+    <sw-modal
+        v-if="showRefundModal"
+        :title="'Refund Capture ' + (refundingCapture ? refundingCapture.briqpayCaptureId.substring(0, 8) + '...' : '')"
+        @modal-close="showRefundModal = false; refundingCapture = null"
+        variant="large"
+    >
+        <div class="briqpay-modal-content">
+            <table class="briqpay-table briqpay-table--selectable">
+                <thead>
+                    <tr>
+                        <th style="width: 32px;">
+                            <sw-checkbox-field
+                                :value="allRefundItemsSelected"
+                                @change="toggleAllRefundItems"
+                            />
+                        </th>
+                        <th>Product</th>
+                        <th style="text-align: right;">Unit Price</th>
+                        <th style="text-align: center; width: 80px;">Captured</th>
+                        <th style="text-align: center; width: 80px;">Refundable</th>
+                        <th style="text-align: center; width: 80px;">To Refund</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(item, idx) in refundItems" :key="item.reference || idx">
+                        <td>
+                            <sw-checkbox-field
+                                v-model:value="item.selected"
+                                :disabled="item.refundableQuantity <= 0"
+                            />
+                        </td>
+                        <td>{{ item.label }}</td>
+                        <td style="text-align: right;">{{ Number(item.unitPrice).toFixed(2) }}</td>
+                        <td style="text-align: center;">{{ item.quantity }}</td>
+                        <td style="text-align: center;">{{ item.refundableQuantity }}</td>
+                        <td style="text-align: center;">
+                            <input
+                                type="number"
+                                v-model.number="item.captureQuantity"
+                                :max="item.refundableQuantity"
+                                min="0"
+                                style="width: 60px; text-align: center; border: 1px solid #d1d9e0; border-radius: 4px; padding: 4px;"
+                                :disabled="item.refundableQuantity <= 0"
+                            >
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="briqpay-modal-footer-fields">
+                <div style="display: flex; align-items: center; justify-content: flex-end; font-size: 16px; font-weight: 600;">
+                    Total: {{ refundAmount.toFixed(2) }}
+                </div>
+            </div>
+        </div>
+
+        <template #modal-footer>
+            <sw-button @click="showRefundModal = false; refundingCapture = null">Cancel</sw-button>
+            <sw-button variant="danger" @click="onPerformRefund" :isLoading="isLoading">Refund</sw-button>
+        </template>
+    </sw-modal>
+</div>

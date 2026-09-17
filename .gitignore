@@ -1,0 +1,38 @@
+# Dependencies (installed by composer / the Shopware host).
+# composer.lock IS committed, so CI resolves the same versions every run.
+/vendor/
+node_modules/
+
+# Environment files, at any level — they hold credentials and never belong in git
+.env
+.env.local
+
+# Administration build caches. The compiled bundle in
+# src/Resources/public/administration/ IS committed, see README.
+/src/Resources/app/administration/.tmp/
+/src/Resources/app/administration/node_modules/
+
+# Build output
+/build/
+/dist/
+*.zip
+
+# Tooling caches and local overrides
+/.phpunit.result.cache
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/.phpstan.cache/
+/phpunit.xml
+/phpstan.neon
+/.php-cs-fixer.php
+/coverage/
+TEST*.xml
+
+# IDE / tooling
+/.idea/
+/.vscode/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,68 @@
+<sw-card
+    v-if="order && order.customFields && order.customFields.briqpay_session_id"
+    title="Briqpay Details"
+    class="briqpay-order-info-wrapper"
+>
+    <div class="briqpay-administration-values">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px;">
+            <div>
+                <p style="color: #758590; font-size: 12px; margin-bottom: 4px;">Payment Method (PSP)</p>
+                <p style="font-size: 14px; margin: 0;"><strong>{{ order.customFields.briqpay_psp_integration_name || 'Briqpay' }}</strong></p>
+            </div>
+            <div>
+                <p style="color: #758590; font-size: 12px; margin-bottom: 4px;">Session ID (Briqpay)</p>
+                <p style="margin: 0;">
+                    <a v-if="backofficeUrl" :href="backofficeUrl" target="_blank" style="color: #189eff; font-weight: bold; font-size: 13px; text-decoration: none;">
+                        {{ order.customFields.briqpay_session_id }}
+                    </a>
+                </p>
+            </div>
+        </div>
+
+        <template v-if="order.customFields.briqpay_company">
+            <hr style="border: 0; border-top: 1px solid #ebedf0; margin: 16px 0 8px 0;">
+            <p style="font-size: 12px; font-weight: bold; margin-bottom: 8px; color: #1e1e24;">Company Information</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
+                <div v-if="order.customFields.briqpay_company.name">
+                    <p style="color: #758590; font-size: 11px; margin-bottom: 2px;">Name</p>
+                    <p style="font-size: 13px; margin: 0;">{{ order.customFields.briqpay_company.name }}</p>
+                </div>
+                <div v-if="order.customFields.briqpay_company.cin && order.customFields.briqpay_company.cin !== '0000000000'">
+                    <p style="color: #758590; font-size: 11px; margin-bottom: 2px;">CIN</p>
+                    <p style="font-size: 13px; margin: 0;">{{ order.customFields.briqpay_company.cin }}</p>
+                </div>
+                <div v-if="order.customFields.briqpay_company.vatNumber">
+                    <p style="color: #758590; font-size: 11px; margin-bottom: 2px;">VAT Number</p>
+                    <p style="font-size: 13px; margin: 0;">{{ order.customFields.briqpay_company.vatNumber }}</p>
+                </div>
+            </div>
+        </template>
+
+        <template v-if="order.customFields.briqpay_psp_metadata">
+            <hr style="border: 0; border-top: 1px dashed #ebedf0; margin: 12px 0;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px 16px;">
+                <div v-for="(value, key) in order.customFields.briqpay_psp_metadata" :key="key">
+                    <p style="color: #758590; font-size: 11px; margin-bottom: 2px; text-transform: capitalize;">
+                        {{ key.replace(/([A-Z])/g, ' $1') }}
+                    </p>
+                    <p style="font-size: 13px; margin: 0;">{{ value }}</p>
+                </div>
+            </div>
+        </template>
+
+        <template v-if="order.customFields.briqpay_strong_auth">
+            <hr style="border: 0; border-top: 1px solid #ebedf0; margin: 16px 0 8px 0;">
+            <p style="font-size: 12px; font-weight: bold; margin-bottom: 8px; color: #1e1e24;">Strong Authentication</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px;">
+                <div v-for="(value, key) in order.customFields.briqpay_strong_auth" :key="key">
+                    <p style="color: #758590; font-size: 11px; margin-bottom: 2px; text-transform: capitalize;">
+                        {{ key.replace(/([A-Z])/g, ' $1') }}
+                    </p>
+                    <p style="font-size: 13px; margin: 0;">{{ value }}</p>
+                </div>
+            </div>
+        </template>
+
+    </div>
+</sw-card>

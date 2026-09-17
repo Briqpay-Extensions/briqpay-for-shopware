@@ -1,0 +1,76 @@
+{
+  "name": "briqpay/module-payments",
+  "description": "Briqpay Payments integration for Shopware 6",
+  "version": "1.0.0",
+  "type": "shopware-platform-plugin",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Briqpay AB",
+      "email": "hello@briqpay.com",
+      "homepage": "https://briqpay.com"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "Briqpay\\Payments\\": "src/"
+    }
+  },
+  "extra": {
+    "shopware-plugin-class": "Briqpay\\Payments\\BriqpayPayments",
+    "plugin-icon": "src/Resources/config/logo.png",
+    "label": {
+      "en-GB": "Briqpay Payments",
+      "de-DE": "Briqpay Payments",
+      "sv-SE": "Briqpay Payments"
+    },
+    "description": {
+      "en-GB": "Accept payments with Briqpay in your Shopware 6 store. Embedded B2C and B2B checkout with full order management: capture, partial capture, refund and cancel from the administration.",
+      "de-DE": "Zahlungen mit Briqpay in Ihrem Shopware-6-Shop annehmen. Eingebetteter B2C- und B2B-Checkout mit Auftragsverwaltung: Erfassen, Teilerfassen, Erstatten und Stornieren direkt im Admin."
+    },
+    "manufacturerLink": {
+      "en-GB": "https://briqpay.com",
+      "de-DE": "https://briqpay.com"
+    },
+    "supportLink": {
+      "en-GB": "https://briqpay.com",
+      "de-DE": "https://briqpay.com"
+    }
+  },
+  "require": {
+    "php": ">=8.2",
+    "shopware/core": "~6.6.0",
+    "shopware/storefront": "~6.6.0"
+  },
+  "require-dev": {
+    "friendsofphp/php-cs-fixer": "^3.13",
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^9.6"
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Briqpay\\Payments\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit",
+    "test:coverage": "phpunit --coverage-text --coverage-html build/coverage",
+    "lint": "php-cs-fixer fix --dry-run --diff",
+    "lint:fix": "php-cs-fixer fix",
+    "analyse": "phpstan analyse --memory-limit=1G",
+    "check": [
+      "@lint",
+      "@analyse",
+      "@test"
+    ]
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "symfony/runtime": true
+    },
+    "platform": {
+      "php": "8.2"
+    }
+  }
+}

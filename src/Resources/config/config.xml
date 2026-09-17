@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="../../../../Core/System/SystemConfig/Schema/config.xsd">
+
+    <card>
+        <title>Briqpay - General</title>
+        <title lang="sv-SE">Briqpay - Allmänt</title>
+
+        <!-- Client ID -->
+        <input-field>
+            <name>clientId</name>
+            <label lang="en-GB">Client ID</label>
+            <label lang="sv-SE">Klient-ID</label>
+            <helpText lang="en-GB">Found in your Briqpay merchant portal under API credentials.</helpText>
+            <required>true</required>
+        </input-field>
+
+        <!-- Client Secret -->
+        <input-field>
+            <name>clientSecret</name>
+            <label lang="en-GB">Client Secret</label>
+            <label lang="sv-SE">Klienthemlighet</label>
+            <type>password</type>
+            <required>true</required>
+        </input-field>
+
+        <!-- Test mode toggle -->
+        <input-field>
+            <name>testMode</name>
+            <label lang="en-GB">Test mode</label>
+            <label lang="sv-SE">Testläge</label>
+            <helpText lang="en-GB">When enabled, requests are sent to the Briqpay playground API instead of production. The Client ID/Secret above must match the selected environment.</helpText>
+            <type>switch</type>
+            <defaultValue>true</defaultValue>
+        </input-field>
+
+        <!-- Terms and conditions URL, referenced by BriqpaySessionService::buildPayload() -->
+        <input-field>
+            <name>termsUrl</name>
+            <label lang="en-GB">Terms &amp; conditions URL</label>
+            <label lang="sv-SE">Länk till köpvillkor</label>
+            <helpText lang="en-GB">Shown to the customer inside the Briqpay checkout. Falls back to the storefront's homepage if left empty.</helpText>
+        </input-field>
+
+        <!-- Verbose logging toggle -->
+        <input-field>
+            <name>verboseLogging</name>
+            <label lang="en-GB">Verbose logging</label>
+            <label lang="sv-SE">Utökad loggning</label>
+            <helpText lang="en-GB">Also writes informational events (webhook received, duplicate delivery ignored, reconciliation summaries) to the Shopware log. Warnings and errors are always logged. Only enable while troubleshooting, as these entries carry order and session identifiers.</helpText>
+            <type>switch</type>
+            <defaultValue>false</defaultValue>
+        </input-field>
+
+    </card>
+
+    <card>
+        <title>Briqpay - Webhook URL (advanced / local development)</title>
+        <title lang="sv-SE">Briqpay - Webhook-URL (avancerat / lokal utveckling)</title>
+
+        <input-field>
+            <name>webhookBaseUrl</name>
+            <label lang="en-GB">Webhook base URL override</label>
+            <helpText lang="en-GB">Only needed when your storefront isn't publicly reachable (e.g. local development). Overrides the domain Briqpay is told to send order/capture/refund status webhooks to — everything else (checkout, redirects) still uses your normal domain. Leave empty in production.</helpText>
+        </input-field>
+
+        <input-field>
+            <name>webhookBaseUrlSource</name>
+            <label lang="en-GB">Webhook base URL discovery endpoint</label>
+            <helpText lang="en-GB">Alternative to the field above: a URL that is polled for JSON like {"url": "https://example.com"} or {"hostname": "example.com"}. This matches the metrics endpoint a local tunnel exposes, so a development tunnel whose hostname changes on every restart is picked up without editing settings. The result is cached briefly. Ignored if the override above is set, and normally left empty in production.</helpText>
+        </input-field>
+    </card>
+</config>

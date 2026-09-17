@@ -1,0 +1,32 @@
+<sw-card v-if="shouldShow" title="Briqpay Payment Link">
+    <p v-if="!linkToShow" style="color: #758590; font-size: 13px; margin-bottom: 12px;">
+        This order has no Briqpay payment yet. Create a payment link to send to
+        the customer — useful for manual/phone orders or when the original
+        payment attempt used a different method.
+    </p>
+    <p v-else style="color: #758590; font-size: 13px; margin-bottom: 12px;">
+        A payment link has been created for this order. The order moves to paid
+        automatically when the customer completes it. Creating a new link
+        replaces this one.
+    </p>
+
+    <div v-if="linkToShow" style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+        <input
+            type="text"
+            readonly
+            :value="linkToShow"
+            style="flex: 1; padding: 6px 8px; border: 1px solid #d1d9e0; border-radius: 4px; font-family: monospace; font-size: 12px;"
+            @click="$event.target.select()"
+        >
+        <sw-button size="small" @click="onCopyLink">Copy</sw-button>
+    </div>
+
+    <sw-button
+        variant="primary"
+        size="small"
+        :isLoading="isLoading"
+        @click="onCreateHostedPage"
+    >
+        {{ linkToShow ? 'Create new link' : 'Create payment link' }}
+    </sw-button>
+</sw-card>

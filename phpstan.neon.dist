@@ -1,0 +1,22 @@
+# Static analysis for the Briqpay Shopware plugin.
+#
+# shopware/core is a regular composer dependency, so PHPStan sees the real
+# Shopware classes -- no stubs are needed. The administration sources under
+# src/Resources are JavaScript and Twig and are not analysed here.
+
+parameters:
+    level: 5
+
+    # Matches the PHP version CI runs static analysis under. Shopware 6.6
+    # supports 8.2 through 8.5; the plugin has to hold on the oldest.
+    phpVersion: 80200
+
+    paths:
+        - src
+        - tests
+
+    excludePaths:
+        - src/Resources
+
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false

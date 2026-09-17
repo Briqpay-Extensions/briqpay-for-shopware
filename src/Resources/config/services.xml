@@ -1,0 +1,150 @@
+<?xml version="1.0" ?>
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
+
+    <services>
+        <service id="briqpay.http.client" class="GuzzleHttp\Client"/>
+        
+        <service id="Briqpay\Payments\Checkout\Capture\BriqpayCaptureDefinition">
+            <tag name="shopware.entity.definition"/>
+        </service>
+
+        <service id="Briqpay\Payments\Components\BriqpayRequestFactory">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="Shopware\Core\Framework\Plugin\PluginService"/>
+            <argument>%kernel.shopware_version%</argument>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpaySessionService">
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="briqpay.http.client"/>
+            <argument type="service" id="router"/>
+            <argument type="service" id="Briqpay\Payments\Components\BriqpayRequestFactory"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+            <argument type="service" id="language.repository"/>
+            <argument type="service" id="country.repository"/> 
+            <argument type="service" id="event_dispatcher"/>
+            <argument type="service" id="request_stack"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister"/>
+        </service>
+
+        <service id="Briqpay\Payments\Controller\BriqpayController" public="true">
+            <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpaySessionService"/>
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="customer.repository"/>
+            <argument type="service" id="Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStateHandler"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextFactory"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+            <argument type="service" id="order_transaction.repository"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLockService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayAddressSyncService"/>
+            <argument type="service" id="payment_method.repository"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayCaptureService"/>
+
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
+
+        <service id="Briqpay\Payments\Controller\BriqpayDecisionController" public="true">
+            <argument type="service" id="Briqpay\Payments\Service\BriqpaySessionService"/>
+            <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpayLockService">
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+        </service>
+
+        <!-- Shopware's logger behind the plugin's "Verbose logging" switch. -->
+        <service id="Briqpay\Payments\Service\BriqpayLogger">
+            <argument type="service" id="logger"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpayAddressSyncService">
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="order_address.repository"/>
+            <argument type="service" id="country.repository"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpayCaptureService">
+            <argument type="service" id="Briqpay\Payments\Components\BriqpayRequestFactory"/>
+            <argument type="service" id="briqpay.http.client"/>
+            <argument type="service" id="order_transaction.repository"/>
+            <argument type="service" id="Doctrine\DBAL\Connection"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+            <argument type="service" id="Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStateHandler"/>
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLockService"/>
+            <argument type="service" id="Shopware\Core\System\StateMachine\StateMachineRegistry"/>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpayHostedPageService">
+            <argument type="service" id="Briqpay\Payments\Components\BriqpayRequestFactory"/>
+            <argument type="service" id="briqpay.http.client"/>
+            <argument type="service" id="order.repository"/>
+            <argument type="service" id="language.repository"/>
+            <argument type="service" id="Shopware\Core\System\SystemConfig\SystemConfigService"/>
+            <argument type="service" id="router"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLockService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+        </service>
+
+        <service id="Briqpay\Payments\Controller\Api\BriqpayCaptureController" public="true">
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayCaptureService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayHostedPageService"/>
+            <call method="setContainer">
+                <argument type="service" id="service_container"/>
+            </call>
+        </service>
+
+        <service id="Briqpay\Payments\Subscriber\CheckoutSubscriber">
+            <argument type="service" id="Briqpay\Payments\Service\BriqpaySessionService"/>
+            <argument type="service" id="Shopware\Core\System\SalesChannel\Context\SalesChannelContextPersister"/>
+            <argument type="service" id="Shopware\Core\Checkout\Cart\SalesChannel\CartService"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+
+        <service id="Briqpay\Payments\Subscriber\StoreApiSubscriber">
+            <argument type="service" id="Briqpay\Payments\Service\BriqpaySessionService"/>
+            <tag name="kernel.event_subscriber"/>
+        </service>
+
+        <service id="Briqpay\Payments\Subscriber\PaymentNameSubscriber">
+            <tag name="kernel.event_subscriber"/>
+        </service>    
+
+        <service id="Briqpay\Payments\Payment\BriqpayPaymentHandler" public="true">
+            <argument type="service" id="Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStateHandler"/>
+            <tag name="shopware.payment.method"/>
+        </service>
+
+        <service id="Briqpay\Payments\Service\BriqpayReconciliationService">
+            <argument type="service" id="order_transaction.repository"/>
+            <argument type="service" id="Shopware\Core\Checkout\Order\Aggregate\OrderTransaction\OrderTransactionStateHandler"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLockService"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+        </service>
+
+        <service id="Briqpay\Payments\ScheduledTask\BriqpayReconciliationTask">
+            <tag name="shopware.scheduled.task"/>
+        </service>
+
+        <service id="Briqpay\Payments\ScheduledTask\BriqpayReconciliationTaskHandler">
+            <argument type="service" id="scheduled_task.repository"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayLogger"/>
+            <argument type="service" id="Briqpay\Payments\Service\BriqpayReconciliationService"/>
+            <tag name="messenger.message_handler" handles="Briqpay\Payments\ScheduledTask\BriqpayReconciliationTask"/>
+        </service>
+    </services>
+</container>

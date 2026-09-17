@@ -1,0 +1,25 @@
+{
+  "base": "/bundles/briqpaypayments/administration/",
+  "entryPoints": {
+    "briqpay-payments": {
+      "css": [
+        "/bundles/briqpaypayments/administration/css/briqpay-payments.css"
+      ],
+      "dynamic": [],
+      "js": [
+        "/bundles/briqpaypayments/administration/js/briqpay-payments.js"
+      ],
+      "legacy": false,
+      "preload": []
+    }
+  },
+  "legacy": false,
+  "metadatas": {},
+  "version": [
+    "7.0.4",
+    7,
+    0,
+    4
+  ],
+  "viteServer": null
+}

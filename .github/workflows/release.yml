@@ -1,0 +1,93 @@
+name: Release
+
+# Two ways in:
+#   - a human pushes a tag directly, or
+#   - tag.yml creates the tag from the composer.json version and calls this
+#     workflow.
+#
+# The second path needs `workflow_call` because a tag pushed by GITHUB_TOKEN
+# does not trigger further workflow runs -- GitHub suppresses that to prevent
+# recursion, so a plain `on: push: tags` would never fire for it.
+on:
+  push:
+    tags: ['v*']
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to build and publish.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish the plugin archive
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve the tag
+        id: meta
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.tag }}
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json, mbstring, intl, zip, gd, pdo_mysql
+          coverage: none
+
+      - name: Set up shopware-cli
+        uses: shopware/shopware-cli-action@v1
+
+      - name: Check the tag matches the plugin version
+        run: |
+          TAG_VERSION="${{ steps.meta.outputs.version }}"
+          VERSION=$(jq -r '.version' composer.json)
+
+          echo "tag:           $TAG_VERSION"
+          echo "composer.json: $VERSION"
+
+          if [ "$TAG_VERSION" != "$VERSION" ]; then
+            echo "::error::Version mismatch between the tag and composer.json"
+            exit 1
+          fi
+
+      - name: Check the changelog has an entry
+        run: |
+          if ! grep -q "^## \[${{ steps.meta.outputs.version }}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [${{ steps.meta.outputs.version }}] section"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run the test suite
+        run: vendor/bin/phpunit
+
+      - name: Validate the plugin
+        run: shopware-cli extension validate .
+
+      - name: Build the plugin archive
+        # `zip` rebuilds the administration bundle from source and strips
+        # everything a merchant's shop does not need (tests, tooling, dev deps).
+        run: |
+          shopware-cli extension zip . --disable-git --release --output-directory build
+          ls -la build
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          files: build/*.zip
+          generate_release_notes: true
+          draft: false

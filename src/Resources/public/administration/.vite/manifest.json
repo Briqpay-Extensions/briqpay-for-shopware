@@ -1,0 +1,11 @@
+{
+  "main.js": {
+    "file": "js/briqpay-payments.js",
+    "name": "briqpay-payments",
+    "src": "main.js",
+    "isEntry": true,
+    "css": [
+      "css/briqpay-payments.css"
+    ]
+  }
+}

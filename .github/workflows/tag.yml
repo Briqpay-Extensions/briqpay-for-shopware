@@ -1,0 +1,77 @@
+name: Tag
+
+# Tagging is driven by the plugin's own version number.
+#
+# Pushing main is what makes a release: this workflow reads `version` from
+# composer.json, and when that version has no tag yet it creates one and hands
+# off to release.yml.
+#
+# Bumping the version in a commit is therefore the act of cutting a release.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag the plugin version
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.check.outputs.created }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read the plugin version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' composer.json)
+          echo "composer.json: $VERSION"
+
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$VERSION' is not semver"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create the tag if this version is new
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists, nothing to do."
+            echo "created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! grep -q "^## \[${{ steps.version.outputs.version }}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [${{ steps.version.outputs.version }}] section"
+            exit 1
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Briqpay for Shopware $TAG"
+          git push origin "$TAG"
+
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "::notice::Created $TAG"
+
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.tag.outputs.tag }}

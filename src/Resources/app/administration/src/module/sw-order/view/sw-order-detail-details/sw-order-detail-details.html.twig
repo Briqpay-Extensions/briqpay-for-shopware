@@ -1,0 +1,32 @@
+{# Shopware's payment-method field is a disabled select bound to a payment_method
+   entity it fetches on its own, with no order in scope -- so it says "Briqpay |
+   Briqpay Payments" even though the shopper paid with a specific provider. The
+   field is read-only anyway, so for a Briqpay order it is replaced with the
+   provider the order was actually paid with ("Nuvei | Briqpay Payments"). Any
+   other payment method falls through to Shopware's own field. #}
+{% block sw_order_detail_details_payment_method_select %}
+    <sw-text-field
+        v-if="transaction && transaction.customFields && transaction.customFields.briqpay_psp_name"
+        :value="transaction.customFields.briqpay_psp_name + ' | Briqpay Payments'"
+        :label="$tc('sw-order.createBase.detailsFooter.labelPaymentMethod')"
+        disabled
+    />
+    <template v-else>
+        {% parent %}
+    </template>
+{% endblock %}
+
+{% block sw_order_detail_details %}
+    {% parent %}
+
+    <briqpay-order-info :order="order" style="margin-top: 20px;"></briqpay-order-info>
+
+    {# reloadEntityData() is the details view's own method: it asks the order
+       page to reload the order, so the transaction state the cards are
+       rendered with follows a capture, refund or cancel without a page reload. #}
+    <div class="briqpay-capture-wrapper" style="margin-top: 20px;">
+        <briqpay-capture :order="order" @order-change="reloadEntityData()"></briqpay-capture>
+    </div>
+
+    <briqpay-hosted-page :order="order" style="margin-top: 20px;" @order-change="reloadEntityData()"></briqpay-hosted-page>
+{% endblock %}

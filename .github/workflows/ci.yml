@@ -1,0 +1,301 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  # The plugin has to load on every PHP version Shopware 6.6 supports.
+  syntax:
+    name: PHP ${{ matrix.php }} syntax
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring, intl, gd, pdo_mysql
+          coverage: none
+
+      - name: Lint every PHP file
+        run: |
+          find src tests -name '*.php' -print0 \
+            | xargs -0 -n1 -P4 php -l
+
+  tests:
+    name: Tests on PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, json, mbstring, intl, zip, gd, pdo_mysql
+          coverage: none
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ matrix.php }}-
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPUnit
+        run: vendor/bin/phpunit --testdox
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, mbstring, intl, zip, gd, pdo_mysql
+          coverage: xdebug
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPUnit with coverage
+        run: vendor/bin/phpunit --coverage-text --coverage-clover=build/clover.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build/clover.xml
+          retention-days: 14
+
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, json, mbstring, intl, zip, gd, pdo_mysql
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Run PHPStan
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=1G
+
+  coding-standards:
+    name: Coding standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: curl, json, mbstring, intl, zip, gd, pdo_mysql
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Check formatting
+        run: vendor/bin/php-cs-fixer fix --dry-run --diff --using-cache=no
+
+  plugin-validation:
+    name: Plugin structure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up shopware-cli
+        uses: shopware/shopware-cli-action@v1
+
+      - name: Check the declared version is semver and has a changelog entry
+        run: |
+          VERSION=$(jq -r '.version' composer.json)
+          echo "composer.json: $VERSION"
+
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$VERSION' is not semver"
+            exit 1
+          fi
+
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no [$VERSION] section"
+            exit 1
+          fi
+
+      - name: Validate the plugin against Shopware's extension rules
+        run: shopware-cli extension validate .
+
+      - name: Check the administration bundle compiles from source
+        run: shopware-cli extension build .
+
+      - name: Check no debugging statements were left behind
+        run: |
+          if grep -rnE '\b(var_dump|print_r|dd|dump|die)\(' --include='*.php' src; then
+            echo "::error::Debugging statement found"
+            exit 1
+          fi
+          if grep -rnE 'console\.(log|debug)\(' --include='*.js' src/Resources/app; then
+            echo "::error::console.log left in administration sources"
+            exit 1
+          fi
+
+      - name: Check migrations live where Shopware loads them from
+        # MigrationCollection scans src/Migration non-recursively; a migration in
+        # a subdirectory is silently never run. That shipped once.
+        run: |
+          if find src/Migration -mindepth 2 -name '*.php' | grep -q .; then
+            echo "::error::Migration files must be directly in src/Migration/"
+            find src/Migration -mindepth 2 -name '*.php'
+            exit 1
+          fi
+
+  # Installs the plugin into a real Shopware.
+  #
+  # The unit suite mocks Shopware, so it cannot catch a service wiring error
+  # in services.xml, a migration that fails against real MySQL, or a class that
+  # no longer matches the Shopware version we declare. This job does.
+  install-smoke:
+    name: Install into Shopware ${{ matrix.shopware }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shopware: ['6.6.10.6']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start Shopware with the plugin mounted
+        run: |
+          docker run -d --name sw -p 80:80 \
+            -v "$PWD:/var/www/html/custom/plugins/BriqpayPayments" \
+            "dockware/dev:${{ matrix.shopware }}"
+
+      - name: Wait for Shopware to come up
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/ || true)
+            if [ "$code" = "200" ]; then
+              echo "Shopware is up after ${i}0s"
+              exit 0
+            fi
+            docker inspect -f '{{.State.Running}}' sw | grep -q true || {
+              echo "::error::Shopware container stopped"; docker logs sw --tail 60; exit 1;
+            }
+            sleep 10
+          done
+          echo "::error::Shopware did not come up in time"
+          docker logs sw --tail 80
+          exit 1
+
+      - name: Install and activate the plugin
+        run: |
+          sw() { docker exec sw bash -lc "cd /var/www/html && php bin/console $*"; }
+          sw plugin:refresh
+          sw plugin:install --activate BriqpayPayments 2>&1 | tee install.log
+          grep -qi "installed" install.log || { echo "::error::Plugin install did not report success"; exit 1; }
+          sw cache:clear
+
+      - name: Assert the migrations ran
+        run: |
+          mysql() { docker exec -u root sw mysql --socket=/var/run/mysqld/mysqld.sock -uroot -proot shopware -N -B -e "$1" 2>/dev/null; }
+
+          for table in briqpay_capture briqpay_lock; do
+            if [ "$(mysql "SHOW TABLES LIKE '$table';" | wc -l)" -ne 1 ]; then
+              echo "::error::Expected table $table to exist after install"
+              exit 1
+            fi
+            echo "table $table present"
+          done
+
+          METHODS=$(mysql "SELECT COUNT(*) FROM payment_method WHERE handler_identifier = 'Briqpay\\\\Payments\\\\Payment\\\\BriqpayPaymentHandler';")
+          echo "payment methods: $METHODS"
+          [ "$METHODS" -ge 1 ] || { echo "::error::Briqpay payment method was not registered"; exit 1; }
+
+      - name: Check the webhook endpoint answers
+        run: |
+          URL="http://localhost/briqpay/webhook"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$URL" \
+            -H 'Content-Type: application/json' -d 'not json')
+          echo "invalid JSON -> $code"
+          [ "$code" = "400" ] || { echo "::error::Expected 400, got $code"; exit 1; }
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$URL" \
+            -H 'Content-Type: application/json' -d '{"event":"order_status"}')
+          echo "missing sessionId -> $code"
+          [ "$code" = "400" ] || { echo "::error::Expected 400, got $code"; exit 1; }
+
+      - name: Uninstall cleanly
+        run: |
+          docker exec sw bash -lc "cd /var/www/html && php bin/console plugin:uninstall BriqpayPayments" 2>&1 | tee uninstall.log
+          grep -qi "uninstalled" uninstall.log || { echo "::error::Plugin uninstall did not report success"; exit 1; }
+
+      - name: Fail on any PHP fatal
+        if: always()
+        run: |
+          if docker exec sw bash -lc "grep -rIl 'PHP Fatal\|Uncaught' /var/www/html/var/log/ 2>/dev/null"; then
+            docker exec sw bash -lc "grep -rI 'PHP Fatal\|Uncaught' /var/www/html/var/log/ | tail -40"
+            echo "::error::A PHP fatal occurred during the smoke test"
+            exit 1
+          fi
+          echo "No fatals."
+
+      - name: Dump the container log on failure
+        if: failure()
+        run: docker logs sw --tail 200
+
+  package:
+    name: Build installable zip
+    runs-on: ubuntu-latest
+    needs: [syntax, tests, static-analysis, coding-standards, plugin-validation, install-smoke]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up shopware-cli
+        uses: shopware/shopware-cli-action@v1
+
+      - name: Build the plugin archive
+        run: shopware-cli extension zip . --disable-git --release --output-directory build
+
+      - name: Upload the archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: BriqpayPayments
+          path: build/*.zip
+          retention-days: 30
