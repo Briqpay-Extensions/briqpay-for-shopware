@@ -85,9 +85,13 @@ The plugin keeps the Briqpay session in step with the cart automatically. It
 re-syncs when the confirm page loads, when the cart changes and when the context
 switches (address, shipping, currency), and only sends an update when the
 total, an address, the company or the cart reference has genuinely changed.
-Switching between consumer and business (a business account, or a billing
-address with a company name) starts a fresh session, since Briqpay treats the
-two as different session types.
+> **Switching between consumer and business restarts the session.** A shopper
+> who logs into a business account, or edits their billing address to add a
+> company name, does not update the existing Briqpay session: the plugin
+> abandons it and opens a new one, because Briqpay treats consumer and business
+> as different session types. Anything the shopper had entered inside the
+> Briqpay iframe up to that point (e.g. a part-filled payment method) is lost
+> and starts over.
 
 When payment completes, Briqpay redirects the shopper to `/briqpay/finalize`.
 The plugin turns the cart into a Shopware order, tags it with the Briqpay
@@ -187,8 +191,11 @@ any other line.
 may not divide evenly. Two partial captures of a three-unit line can sum a few
 minor units away from the whole. Briqpay treats such an order as fully
 captured, so the plugin does too: a capture or refund counts as complete within
-5 minor units of the target. The tolerance is bounded, so a genuinely
-incomplete capture still shows as `paid_partially`.
+5 minor units of the target. This tolerance only decides the transaction
+**state** shown on the order (`paid` vs `paid_partially`); the amount recorded
+for every capture and refund, and everything Briqpay itself settles, is always
+exact to the minor unit. It is bounded, so a genuinely incomplete capture still
+shows as `paid_partially`.
 
 ## Payment links (hosted payment pages)
 
@@ -236,6 +243,13 @@ It must be reachable from the public internet over HTTPS.
 > session from Briqpay over the authenticated API before changing anything. An
 > unauthenticated caller can therefore make the shop re-sync an order against
 > Briqpay's own record, but cannot dictate what that record says.
+>
+> This design has a cost: verifying a request means calling Briqpay's API, so
+> an endpoint with no signature to reject bad traffic locally is, in principle,
+> a target for forcing outbound calls. The plugin rejects anything not shaped
+> like a real Briqpay session id before making that call, but a public
+> endpoint that talks to a third-party API should still sit behind whatever
+> request-rate limiting your infrastructure normally applies to one.
 
 If the session cannot be fetched from Briqpay, the plugin answers `502` and
 acts on nothing, so Briqpay retries later. A `captureId` or `refundId` that
@@ -281,7 +295,7 @@ checkout and redirects keep the normal domain:
 | Client ID | *(required)* | From **API credentials** in the Briqpay merchant portal. |
 | Client Secret | *(required)* | Differs between playground and production. |
 | Test mode | On | On sends requests to the Briqpay playground API; off moves real money. The credentials must match the selected environment. |
-| Terms & conditions URL | *(empty)* | Linked from inside the Briqpay checkout. Falls back to the storefront's home page. |
+| Terms & conditions URL | *(empty)* | Linked from inside the Briqpay checkout. Falls back to the shop's own Terms of Service page (**Settings → Shop → Basic information**) when one is configured there, then to the storefront's home page. |
 | Verbose logging | Off | Also writes informational entries (webhook received, duplicate delivery ignored, reconciliation summaries) to the Shopware log. Warnings and errors are logged regardless. Enable only while troubleshooting, as these entries carry order and session identifiers. |
 
 ### Briqpay - Webhook URL (advanced / local development)

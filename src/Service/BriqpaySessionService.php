@@ -214,7 +214,7 @@ class BriqpaySessionService
                 ],
             ],
             'urls' => [
-                'terms' => $this->configService->get('BriqpayPayments.config.termsUrl') ?? $this->getAbsoluteUrl('frontend.home.page', $context),
+                'terms' => $this->resolveTermsUrl($context),
                 'redirect' => $this->getRedirectUrl($context),
             ],
             'modules' => [
@@ -445,11 +445,42 @@ class BriqpaySessionService
     /**
      * Helper to generate a fully qualified URL for the sales channel domain.
      */
-    private function getAbsoluteUrl(string $routeName, SalesChannelContext $context): string
+    private function getAbsoluteUrl(string $routeName, SalesChannelContext $context, array $routeParams = []): string
     {
         $baseUrl = $this->resolveCurrentDomainUrl($context) ?? $this->firstDomainUrl($context);
 
-        return $baseUrl . $this->router->generate($routeName);
+        return $baseUrl . $this->router->generate($routeName, $routeParams);
+    }
+
+    /**
+     * The terms URL shown inside the Briqpay checkout.
+     *
+     * Prefers, in order: the plugin's own override, the sales channel's
+     * configured Terms of Service page (the same `core.basicInformation.tosPage`
+     * Shopware's own native checkout links from its terms checkbox), and only
+     * then the storefront's home page. A shop that has set up its legal pages
+     * the normal Shopware way therefore gets its actual terms linked from
+     * Briqpay's checkout without any extra configuration; the home page is a
+     * last resort for a shop that has configured neither.
+     */
+    private function resolveTermsUrl(SalesChannelContext $context): string
+    {
+        $override = $this->configService->get('BriqpayPayments.config.termsUrl');
+        if (!empty($override)) {
+            return $override;
+        }
+
+        $tosPageId = $this->configService->get('core.basicInformation.tosPage', $context->getSalesChannelId());
+        if (!empty($tosPageId)) {
+            try {
+                return $this->getAbsoluteUrl('frontend.cms.page', $context, ['id' => $tosPageId]);
+            } catch (\Throwable) {
+                // Falls through to the home page below; an unresolvable page
+                // id must never break session creation.
+            }
+        }
+
+        return $this->getAbsoluteUrl('frontend.home.page', $context);
     }
 
     /**

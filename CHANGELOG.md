@@ -3,6 +3,15 @@
 All notable changes to the Briqpay Payments plugin for Shopware 6 are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-09-18
+
+### Fixed
+- The terms URL sent to Briqpay's checkout now falls back to the shop's own configured Terms of Service page (`core.basicInformation.tosPage`, the same page Shopware's native checkout links to) before falling back further to the storefront home page. Previously it went straight to the home page when no override was set.
+- Webhook requests whose `sessionId` isn't shaped like a real Briqpay session id are rejected immediately, without the outbound API call the plugin would otherwise make to verify it.
+
+### Changed
+- Documentation clarifies that the 5-minor-unit capture/refund tolerance only affects which transaction state is shown (`paid` vs `paid_partially`); the amount recorded for every capture and refund is always exact.
+
 ## [1.0.0] - 2026-09-17
 
 First public release.

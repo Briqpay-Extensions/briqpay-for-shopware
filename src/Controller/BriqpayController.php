@@ -197,6 +197,15 @@ class BriqpayController extends StorefrontController
             return new JsonResponse(['success' => false], 400);
         }
 
+        // Every real Briqpay session id is a UUID. Rejecting anything else here
+        // costs nothing and never rejects a genuine delivery, but it does mean
+        // a request that is just noise (not even shaped like a session id) is
+        // answered locally instead of spending an outbound call to the Briqpay
+        // API to find out it doesn't exist.
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $sessionId)) {
+            return new JsonResponse(['success' => false], 400);
+        }
+
         // Briqpay may redeliver the same event (e.g. if our previous response was
         // lost). Claim a short-lived dedupe marker keyed on the event's own identity
         // so a genuine retry doesn't get processed twice; a fresh 2xx is returned

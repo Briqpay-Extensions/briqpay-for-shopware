@@ -378,4 +378,64 @@ class BriqpaySessionServiceTest extends TestCase
         $this->assertArrayNotHasKey('billing', $payload['data']);
         $this->assertArrayNotHasKey('shipping', $payload['data']);
     }
+
+    public function testTermsUrlUsesTheConfiguredOverrideWhenSet(): void
+    {
+        $this->configService->method('get')->willReturnCallback(
+            fn (string $key) => $key === 'BriqpayPayments.config.termsUrl' ? 'https://shop.example.com/terms' : null
+        );
+
+        $payload = $this->service->buildPayload($this->cart(), $this->contextWithDomain());
+
+        $this->assertSame('https://shop.example.com/terms', $payload['urls']['terms']);
+    }
+
+    /**
+     * Without an override, the shop's own Terms of Service page (the same
+     * core.basicInformation.tosPage a merchant sets up for Shopware's native
+     * checkout) is used, rather than falling straight to the home page.
+     */
+    public function testTermsUrlFallsBackToTheShopsOwnTosPageWhenNoOverrideIsSet(): void
+    {
+        $this->configService->method('get')->willReturnCallback(
+            fn (string $key) => $key === 'core.basicInformation.tosPage' ? 'tos-page-id' : null
+        );
+
+        // A dedicated router double: the shared one from setUp() is already
+        // stubbed for every route name and, since that stub was configured
+        // first, would keep answering for frontend.cms.page too rather than
+        // this test's params-aware behaviour.
+        $router = $this->createMock(RouterInterface::class);
+        $router->method('generate')->willReturnCallback(
+            fn (string $name, array $params = []) => $name === 'frontend.cms.page'
+                ? '/nav/' . ($params['id'] ?? '')
+                : '/' . str_replace('.', '/', $name)
+        );
+
+        $service = new BriqpaySessionService(
+            $this->configService,
+            $this->httpClient,
+            $router,
+            $this->requestFactory,
+            $this->createMock(LoggerInterface::class),
+            $this->languageRepository,
+            $this->countryRepository,
+            $this->createMock(EventDispatcherInterface::class),
+            new RequestStack(),
+            $this->createMock(SalesChannelContextPersister::class)
+        );
+
+        $payload = $service->buildPayload($this->cart(), $this->contextWithDomain());
+
+        $this->assertStringEndsWith('/nav/tos-page-id', $payload['urls']['terms']);
+    }
+
+    public function testTermsUrlFallsBackToTheHomePageWhenNothingIsConfigured(): void
+    {
+        $this->configService->method('get')->willReturn(null);
+
+        $payload = $this->service->buildPayload($this->cart(), $this->contextWithDomain());
+
+        $this->assertStringEndsWith('/frontend/home/page', $payload['urls']['terms']);
+    }
 }

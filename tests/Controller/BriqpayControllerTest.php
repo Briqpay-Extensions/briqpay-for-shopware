@@ -143,7 +143,7 @@ class BriqpayControllerTest extends TestCase
 
         $this->briqpayService->expects($this->never())->method('getSession');
 
-        $request = $this->jsonRequest(['sessionId' => 'sess-1', 'event' => 'order_status', 'status' => 'order_pending']);
+        $request = $this->jsonRequest(['sessionId' => '00000000-0000-4000-8000-000000000001', 'event' => 'order_status', 'status' => 'order_pending']);
         $response = $this->controller->webhook($request, $this->createMock(SalesChannelContext::class));
 
         $this->assertEquals(200, $response->getStatusCode());
@@ -151,11 +151,27 @@ class BriqpayControllerTest extends TestCase
         $this->assertTrue($data['success']);
     }
 
+    /**
+     * A session id that isn't even shaped like one is rejected before any
+     * outbound call to Briqpay -- the endpoint has no signature to check, so
+     * this is the cheapest available guard against pointless traffic forcing
+     * a live API lookup for every request.
+     */
+    public function testWebhookRejectsANonUuidSessionIdWithoutCallingBriqpay(): void
+    {
+        $this->briqpayService->expects($this->never())->method('getSession');
+
+        $request = $this->jsonRequest(['sessionId' => 'not-a-real-session-id', 'event' => 'order_status', 'status' => 'order_pending']);
+        $response = $this->controller->webhook($request, $this->createMock(SalesChannelContext::class));
+
+        $this->assertEquals(400, $response->getStatusCode());
+    }
+
     public function testWebhookReturns502WhenSessionCannotBeVerified(): void
     {
         $this->briqpayService->method('getSession')->willReturn(['error' => true, 'message' => 'not found']);
 
-        $request = $this->jsonRequest(['sessionId' => 'sess-2', 'event' => 'order_status', 'status' => 'order_approved_not_captured']);
+        $request = $this->jsonRequest(['sessionId' => '00000000-0000-4000-8000-000000000002', 'event' => 'order_status', 'status' => 'order_approved_not_captured']);
         $response = $this->controller->webhook($request, $this->createMock(SalesChannelContext::class));
 
         $this->assertEquals(502, $response->getStatusCode());
@@ -167,14 +183,14 @@ class BriqpayControllerTest extends TestCase
         $order = $this->orderWithTransactionState('open');
         $this->orderRepository->method('search')->willReturn($this->searchResultReturning($order));
         $this->briqpayService->method('getSession')->willReturn([
-            'sessionId' => 'sess-3',
+            'sessionId' => '00000000-0000-4000-8000-000000000003',
             'data' => ['paymentTags' => ['manual_review']],
         ]);
 
         $this->stateHandler->expects($this->once())->method('remind')->with('11111111111111111111111111111111');
         $this->stateHandler->expects($this->never())->method('authorize');
 
-        $request = $this->jsonRequest(['sessionId' => 'sess-3', 'event' => 'order_status', 'status' => 'order_approved_not_captured']);
+        $request = $this->jsonRequest(['sessionId' => '00000000-0000-4000-8000-000000000003', 'event' => 'order_status', 'status' => 'order_approved_not_captured']);
         $response = $this->controller->webhook($request, $this->createMock(SalesChannelContext::class));
 
         $this->assertEquals(200, $response->getStatusCode());
@@ -185,14 +201,14 @@ class BriqpayControllerTest extends TestCase
         $order = $this->orderWithTransactionState('authorized');
         $this->orderRepository->method('search')->willReturn($this->searchResultReturning($order));
         $this->briqpayService->method('getSession')->willReturn([
-            'sessionId' => 'sess-4',
+            'sessionId' => '00000000-0000-4000-8000-000000000004',
             'data' => ['captures' => [['captureId' => 'cap-real', 'status' => 'approved']]],
         ]);
 
         $this->stateHandler->expects($this->never())->method('paid');
 
         $request = $this->jsonRequest([
-            'sessionId' => 'sess-4',
+            'sessionId' => '00000000-0000-4000-8000-000000000004',
             'event' => 'capture_status',
             'status' => 'approved',
             'captureId' => 'cap-fabricated',
@@ -207,7 +223,7 @@ class BriqpayControllerTest extends TestCase
         $order = $this->orderWithTransactionState('authorized');
         $this->orderRepository->method('search')->willReturn($this->searchResultReturning($order));
         $this->briqpayService->method('getSession')->willReturn([
-            'sessionId' => 'sess-5',
+            'sessionId' => '00000000-0000-4000-8000-000000000005',
             'data' => ['captures' => [['captureId' => 'cap-real', 'status' => 'approved']]],
         ]);
 
@@ -219,12 +235,12 @@ class BriqpayControllerTest extends TestCase
             ->method('syncFromSession')
             ->with(
                 '22222222222222222222222222222222',
-                $this->callback(fn (array $session) => ($session['sessionId'] ?? null) === 'sess-5'),
+                $this->callback(fn (array $session) => ($session['sessionId'] ?? null) === '00000000-0000-4000-8000-000000000005'),
                 $this->anything()
             );
 
         $request = $this->jsonRequest([
-            'sessionId' => 'sess-5',
+            'sessionId' => '00000000-0000-4000-8000-000000000005',
             'event' => 'capture_status',
             'status' => 'approved',
             'captureId' => 'cap-real',
@@ -245,7 +261,7 @@ class BriqpayControllerTest extends TestCase
         $order = $this->orderWithTransactionState('open');
         $this->orderRepository->method('search')->willReturn($this->searchResultReturning($order));
         $this->briqpayService->method('getSession')->willReturn([
-            'sessionId' => 'sess-auto',
+            'sessionId' => '00000000-0000-4000-8000-0000000000a0',
             'data' => ['captures' => [['captureId' => 'cap-auto', 'status' => 'approved', 'autoCaptured' => true]]],
         ]);
 
@@ -253,7 +269,7 @@ class BriqpayControllerTest extends TestCase
         $this->captureService->expects($this->once())->method('syncFromSession');
 
         $request = $this->jsonRequest([
-            'sessionId' => 'sess-auto',
+            'sessionId' => '00000000-0000-4000-8000-0000000000a0',
             'event' => 'order_status',
             'status' => 'order_approved_not_captured',
         ]);
@@ -270,12 +286,12 @@ class BriqpayControllerTest extends TestCase
     {
         $order = $this->orderWithTransactionState('paid');
         $this->orderRepository->method('search')->willReturn($this->searchResultReturning($order));
-        $this->briqpayService->method('getSession')->willReturn(['sessionId' => 'sess-paid', 'data' => []]);
+        $this->briqpayService->method('getSession')->willReturn(['sessionId' => '00000000-0000-4000-8000-0000000000ad', 'data' => []]);
 
         $this->stateHandler->expects($this->never())->method('authorize');
 
         $request = $this->jsonRequest([
-            'sessionId' => 'sess-paid',
+            'sessionId' => '00000000-0000-4000-8000-0000000000ad',
             'event' => 'order_status',
             'status' => 'order_approved_not_captured',
         ]);
